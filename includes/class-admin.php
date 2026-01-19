@@ -27,7 +27,7 @@ class OES_Admin_Settings {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'handle_form_submissions'));
         add_action('admin_notices', array($this, 'display_admin_notices'));
-        
+        add_action('admin_init', array($this, 'oes_handle_auth_form'));
         // Add admin styles
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_styles'));
     }
@@ -285,16 +285,57 @@ class OES_Admin_Settings {
         return $html;
     }
     
+
+    public function oes_handle_auth_form() {
+
+        // Check form submission
+        if (
+            ! isset($_POST['oes_action']) ||
+            $_POST['oes_action'] !== 'authenticate'
+        ) {
+            return;
+        }
+
+        // Verify nonce
+        if (
+            ! isset($_POST['oes_nonce']) ||
+            ! wp_verify_nonce($_POST['oes_nonce'], 'oes_admin_action')
+        ) {
+            return;
+        }
+
+        // Sanitize inputs
+        $username = isset($_POST['oes_username']) 
+            ? sanitize_text_field($_POST['oes_username']) 
+            : '';
+
+        $password = isset($_POST['oes_password']) 
+            ? sanitize_text_field($_POST['oes_password']) 
+            : '';
+
+        // Save to options table
+        update_option('oes_username', $username);
+        update_option('oes_password', $password);
+
+        // Optional: redirect to avoid resubmission
+        wp_redirect(add_query_arg('oes_saved', '1', wp_get_referer()));
+        exit;
+    } 
+            
+
+
     /**
      * Render SINGLE admin page with tabs
      */
     public function render_admin_page() {
+
+    
         $auth_status = $this->api_handler->get_auth_status();
         $last_sync_results = get_option('oes_last_sync_results', array());
         $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
         
         // Pagination settings
-        $per_page = 50; // Number of employees per page
+        $per_page = 50; 
         $current_page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
         
         ?>
@@ -362,6 +403,7 @@ class OES_Admin_Settings {
                                                id="oes_username" 
                                                name="oes_username" 
                                                class="regular-text" 
+                                               value="<?php echo esc_attr(get_option('oes_username')); ?>"
                                                required
                                                placeholder="<?php esc_attr_e('Enter your API username', 'olgerdin-employee-sync'); ?>">
                                         <p class="description">
@@ -378,6 +420,7 @@ class OES_Admin_Settings {
                                                id="oes_password" 
                                                name="oes_password" 
                                                class="regular-text" 
+                                               value="<?php echo esc_attr(get_option('oes_password')); ?>"
                                                required
                                                placeholder="<?php esc_attr_e('Enter your API password', 'olgerdin-employee-sync'); ?>">
                                         <p class="description">
@@ -405,13 +448,13 @@ class OES_Admin_Settings {
                         </form>
                     </div>
                     
-                    <?php $last_sync = get_option('oes_last_sync', ''); ?>
+                    <?php /* $last_sync = get_option('oes_last_sync', ''); ?>
                     <?php if ($last_sync): ?>
                         <div class="oes-last-sync">
                             <h3><?php echo esc_html('Last Sync', 'olgerdin-employee-sync'); ?></h3>
                             <p><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($last_sync))); ?></p>
                         </div>
-                    <?php endif; ?>
+                    <?php endif; */ ?>
                     
                 <?php elseif ($current_tab === 'sync'): ?>
                     <!-- Sync Tab Content -->
@@ -498,7 +541,7 @@ class OES_Admin_Settings {
                     ?>
                     
                     <div class="oes-employees-table">
-                        <h2><?php _e('Synced Employees', 'olgerdin-employee-sync'); ?></h2>
+                        <h2><?php echo esc_html('Synced Employees', 'olgerdin-employee-sync'); ?></h2>
                         
                         <?php if ($employee_count > 0): ?>
                             <p class="description">
@@ -521,13 +564,13 @@ class OES_Admin_Settings {
                                 <table class="wp-list-table widefat fixed striped">
                                     <thead>
                                         <tr>
-                                            <th><?php _e('ID', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Name', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Title', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Department', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Email', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Phone', 'olgerdin-employee-sync'); ?></th>
-                                            <th><?php _e('Last Updated', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('ID', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Name', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Title', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Department', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Email', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Phone', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Last Updated', 'olgerdin-employee-sync'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -601,7 +644,7 @@ class OES_Admin_Settings {
                             
                         <?php else: ?>
                             <div class="oes-no-data">
-                                <p><?php _e('No employees have been synced yet. Use the sync button above to fetch employees from the API.', 'olgerdin-employee-sync'); ?></p>
+                                <p><?php echo esc_html('No employees have been synced yet. Use the sync button above to fetch employees from the API.', 'olgerdin-employee-sync'); ?></p>
                             </div>
                         <?php endif; ?>
                     </div>
