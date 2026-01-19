@@ -206,12 +206,96 @@ class OES_Admin_Settings {
     }
     
     /**
+     * Get paginated synced employees from database
+     */
+    private function get_synced_employees($page = 1, $per_page = 20) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . OES_TABLE_NAME;
+        
+        // Calculate offset
+        $offset = ($page - 1) * $per_page;
+        
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table_name ORDER BY updated_at DESC, name ASC LIMIT %d OFFSET %d",
+                $per_page,
+                $offset
+            ),
+            ARRAY_A
+        );
+    }
+    
+    /**
+     * Get employee count
+     */
+    private function get_employee_count() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . OES_TABLE_NAME;
+        
+        return $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
+    }
+    
+    /**
+     * Get total pages for pagination
+     */
+    private function get_total_pages($per_page = 20) {
+        $total_employees = $this->get_employee_count();
+        return ceil($total_employees / $per_page);
+    }
+    
+    /**
+     * Generate simple pagination HTML
+     */
+    private function generate_pagination($current_page, $total_pages) {
+        if ($total_pages <= 1) {
+            return '';
+        }
+        
+        $html = '<div class="oes-pagination">';
+        
+        // Previous button
+        if ($current_page > 1) {
+            $html .= '<a href="?page=' . $this->page_slug . '&tab=sync&p=' . ($current_page - 1) . '" class="oes-page-link oes-prev">« ' . __('Previous', 'olgerdin-employee-sync') . '</a>';
+        }
+        
+        // Page numbers
+        for ($i = 1; $i <= $total_pages; $i++) {
+            if ($i == $current_page) {
+                $html .= '<span class="oes-page-link oes-current">' . $i . '</span>';
+            } elseif (
+                $i == 1 || 
+                $i == $total_pages || 
+                ($i >= $current_page - 2 && $i <= $current_page + 2)
+            ) {
+                $html .= '<a href="?page=' . $this->page_slug . '&tab=sync&p=' . $i . '" class="oes-page-link">' . $i . '</a>';
+            } elseif (
+                $i == $current_page - 3 || 
+                $i == $current_page + 3
+            ) {
+                $html .= '<span class="oes-page-link oes-dots">...</span>';
+            }
+        }
+        
+        // Next button
+        if ($current_page < $total_pages) {
+            $html .= '<a href="?page=' . $this->page_slug . '&tab=sync&p=' . ($current_page + 1) . '" class="oes-page-link oes-next">' . __('Next', 'olgerdin-employee-sync') . ' »</a>';
+        }
+        
+        $html .= '</div>';
+        return $html;
+    }
+    
+    /**
      * Render SINGLE admin page with tabs
      */
     public function render_admin_page() {
         $auth_status = $this->api_handler->get_auth_status();
         $last_sync_results = get_option('oes_last_sync_results', array());
         $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
+        
+        // Pagination settings
+        $per_page = 50; // Number of employees per page
+        $current_page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
         
         ?>
         <div class="wrap">
@@ -288,7 +372,7 @@ class OES_Admin_Settings {
                                 <tr>
                                     <th scope="row">
                                         <label for="oes_password"><?php echo esc_html('Password', 'olgerdin-employee-sync'); ?></label>
-                                </th>
+                                    </th>
                                     <td>
                                         <input type="password" 
                                                id="oes_password" 
@@ -324,87 +408,207 @@ class OES_Admin_Settings {
                     <?php $last_sync = get_option('oes_last_sync', ''); ?>
                     <?php if ($last_sync): ?>
                         <div class="oes-last-sync">
-                            <h3><?php _e('Last Sync', 'olgerdin-employee-sync'); ?></h3>
+                            <h3><?php echo esc_html('Last Sync', 'olgerdin-employee-sync'); ?></h3>
                             <p><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($last_sync))); ?></p>
                         </div>
                     <?php endif; ?>
                     
                 <?php elseif ($current_tab === 'sync'): ?>
                     <!-- Sync Tab Content -->
-                    <?php //if (!$auth_status['token_valid']): ?>
-                        <div class="notice notice-error">
-                            <p><?php echo esc_html('You must authenticate with the API before you can sync employees.', 'olgerdin-employee-sync'); ?></p>
+                    <?php if (!$auth_status['token_valid']): ?>
+                        <div class="notice notice-warning">
+                            <p><?php echo esc_html('Authentication required for new sync operations. You can still view previously synced data below.', 'olgerdin-employee-sync'); ?></p>
                             <p>
-                                <a href="?page=<?php echo esc_attr($this->page_slug); ?>&tab=dashboard" class="button">
+                                <a href="?page=<?php echo esc_attr($this->page_slug); ?>&tab=dashboard" class="button button-primary">
                                     <?php echo esc_html('Go to Authentication', 'olgerdin-employee-sync'); ?>
                                 </a>
                             </p>
                         </div>
-                    <?php //else: ?>
-                        <div class="oes-sync-controls">
-                            <form method="post">
-                                <?php wp_nonce_field('oes_admin_action', 'oes_nonce'); ?>
-                                <input type="hidden" name="oes_action" value="sync_employees">
-                                
-                                <p>
-                                    <button type="submit" class="button button-primary button-large">
-                                        <?php echo esc_html('Start Employee Sync', 'olgerdin-employee-sync'); ?>
-                                    </button>
-                                </p>
-                                
-                                <p class="description">
-                                    <?php echo esc_html('This will fetch all employees from the Olgerdin API and sync them with your WordPress database.', 'olgerdin-employee-sync'); ?>
-                                </p>
-                            </form>
-                        </div>
-                        
-                        <?php if (!empty($last_sync_results)): ?>
-                            <div class="oes-sync-results">
-                                <h2><?php echo esc_html('Last Sync Results', 'olgerdin-employee-sync'); ?></h2>
-                                
-                                <div class="oes-results-stats">
-                                    <div class="oes-stat-box">
-                                        <span class="oes-stat-number"><?php echo esc_html($last_sync_results['total']); ?></span>
-                                        <span class="oes-stat-label"><?php echo esc_html('Total Employees', 'olgerdin-employee-sync'); ?></span>
-                                    </div>
-                                    
-                                    <div class="oes-stat-box oes-stat-success">
-                                        <span class="oes-stat-number"><?php echo esc_html($last_sync_results['inserted']); ?></span>
-                                        <span class="oes-stat-label"><?php echo esc_html('Inserted', 'olgerdin-employee-sync'); ?></span>
-                                    </div>
-                                    
-                                    <div class="oes-stat-box oes-stat-updated">
-                                        <span class="oes-stat-number"><?php echo esc_html($last_sync_results['updated']); ?></span>
-                                        <span class="oes-stat-label"><?php echo esc_html('Updated', 'olgerdin-employee-sync'); ?></span>
-                                    </div>
-                                    
-                                    <div class="oes-stat-box oes-stat-error">
-                                        <span class="oes-stat-number"><?php echo esc_html($last_sync_results['failed']); ?></span>
-                                        <span class="oes-stat-label"><?php echo esc_html('Failed', 'olgerdin-employee-sync'); ?></span>
-                                    </div>
-                                </div>
-                                
-                                <?php if (!empty($last_sync_results['errors'])): ?>
-                                    <div class="oes-sync-errors">
-                                        <h3><?php echo esc_html('Errors', 'olgerdin-employee-sync'); ?></h3>
-                                        <ul>
-                                            <?php foreach ($last_sync_results['errors'] as $error): ?>
-                                                <li><?php echo esc_html($error); ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endif; ?>
                     <?php endif; ?>
                     
-                <?php //endif; ?>
-
-                <!-- End tab -->
+                    <div class="oes-sync-controls">
+                        <form method="post">
+                            <?php wp_nonce_field('oes_admin_action', 'oes_nonce'); ?>
+                            <input type="hidden" name="oes_action" value="sync_employees">
+                            
+                            <p>
+                                <button type="submit" 
+                                        class="button button-primary button-large"
+                                        <?php echo !$auth_status['token_valid'] ? 'disabled' : ''; ?>>
+                                    <?php echo esc_html('Start Employee Sync', 'olgerdin-employee-sync'); ?>
+                                </button>
+                                
+                                <?php if (!$auth_status['token_valid']): ?>
+                                    <span class="oes-sync-disabled">
+                                        <?php echo esc_html('Authentication required before syncing.', 'olgerdin-employee-sync'); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </p>
+                            
+                            <p class="description">
+                                <?php echo esc_html('This will fetch all employees from the Olgerdin API and sync them with your WordPress database.', 'olgerdin-employee-sync'); ?>
+                            </p>
+                        </form>
+                    </div>
+                    
+                    <?php if (!empty($last_sync_results)): ?>
+                        <div class="oes-sync-results">
+                            <h2><?php echo esc_html('Last Sync Results', 'olgerdin-employee-sync'); ?></h2>
+                            
+                            <div class="oes-results-stats">
+                                <div class="oes-stat-box">
+                                    <span class="oes-stat-number"><?php echo esc_html($last_sync_results['total']); ?></span>
+                                    <span class="oes-stat-label"><?php echo esc_html('Total Employees', 'olgerdin-employee-sync'); ?></span>
+                                </div>
+                                
+                                <div class="oes-stat-box oes-stat-success">
+                                    <span class="oes-stat-number"><?php echo esc_html($last_sync_results['inserted']); ?></span>
+                                    <span class="oes-stat-label"><?php echo esc_html('Inserted', 'olgerdin-employee-sync'); ?></span>
+                                </div>
+                                
+                                <div class="oes-stat-box oes-stat-updated">
+                                    <span class="oes-stat-number"><?php echo esc_html($last_sync_results['updated']); ?></span>
+                                    <span class="oes-stat-label"><?php echo esc_html('Updated', 'olgerdin-employee-sync'); ?></span>
+                                </div>
+                                
+                                <div class="oes-stat-box oes-stat-error">
+                                    <span class="oes-stat-number"><?php echo esc_html($last_sync_results['failed']); ?></span>
+                                    <span class="oes-stat-label"><?php echo esc_html('Failed', 'olgerdin-employee-sync'); ?></span>
+                                </div>
+                            </div>
+                            
+                            <?php if (!empty($last_sync_results['errors'])): ?>
+                                <div class="oes-sync-errors">
+                                    <h3><?php echo esc_html('Errors', 'olgerdin-employee-sync'); ?></h3>
+                                    <ul>
+                                        <?php foreach ($last_sync_results['errors'] as $error): ?>
+                                            <li><?php echo esc_html($error); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- Display all synced employees in a table with pagination -->
+                    <?php
+                    $employees = $this->get_synced_employees($current_page, $per_page);
+                    $employee_count = $this->get_employee_count();
+                    $total_pages = $this->get_total_pages($per_page);
+                    ?>
+                    
+                    <div class="oes-employees-table">
+                        <h2><?php _e('Synced Employees', 'olgerdin-employee-sync'); ?></h2>
+                        
+                        <?php if ($employee_count > 0): ?>
+                            <p class="description">
+                                <?php 
+                                $start = (($current_page - 1) * $per_page) + 1;
+                                $end = min($current_page * $per_page, $employee_count);
+                                printf(
+                                    __('Showing employees %d-%d of %d total', 'olgerdin-employee-sync'),
+                                    $start,
+                                    $end,
+                                    $employee_count
+                                ); 
+                                ?>
+                            </p>
+                            
+                            <!-- Pagination top -->
+                            <?php //echo $this->generate_pagination($current_page, $total_pages); ?>
+                            
+                            <div class="oes-table-container">
+                                <table class="wp-list-table widefat fixed striped">
+                                    <thead>
+                                        <tr>
+                                            <th><?php _e('ID', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Name', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Title', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Department', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Email', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Phone', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php _e('Last Updated', 'olgerdin-employee-sync'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (!empty($employees)): ?>
+                                            <?php foreach ($employees as $employee): ?>
+                                                <tr>
+                                                    <td><?php echo esc_html($employee['employee_detail_id']); ?></td>
+                                                    <td>
+                                                        <?php echo esc_html($employee['name']); ?>
+                                                        <?php if (!empty($employee['image_url'])): ?>
+                                                            <div class="oes-employee-image">
+                                                                <img src="<?php echo esc_url($employee['image_url']); ?>" 
+                                                                     alt="<?php echo esc_attr($employee['name']); ?>"
+                                                                     style="max-width: 50px; max-height: 50px; border-radius: 4px; margin-top: 5px;">
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td><?php echo esc_html($employee['title']); ?></td>
+                                                    <td><?php echo esc_html($employee['department']); ?></td>
+                                                    <td>
+                                                        <?php if (!empty($employee['email'])): ?>
+                                                            <a href="mailto:<?php echo esc_attr($employee['email']); ?>">
+                                                                <?php echo esc_html($employee['email']); ?>
+                                                            </a>
+                                                        <?php else: ?>
+                                                            -
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php 
+                                                        $phone = !empty($employee['mobile']) ? $employee['mobile'] : $employee['phone'];
+                                                        echo esc_html($phone ?: '-'); 
+                                                        ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php 
+                                                        echo esc_html(
+                                                            date_i18n(
+                                                                get_option('date_format') . ' ' . get_option('time_format'),
+                                                                strtotime($employee['updated_at'])
+                                                            )
+                                                        ); 
+                                                        ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <tr>
+                                                <td colspan="7" class="oes-no-data">
+                                                    <?php echo esc_html('No employees have been synced yet.', 'olgerdin-employee-sync'); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th><?php echo esc_html('ID', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Name', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Title', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Department', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Email', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Phone', 'olgerdin-employee-sync'); ?></th>
+                                            <th><?php echo esc_html('Last Updated', 'olgerdin-employee-sync'); ?></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            
+                            <!-- Pagination bottom -->
+                            <?php echo $this->generate_pagination($current_page, $total_pages); ?>
+                            
+                        <?php else: ?>
+                            <div class="oes-no-data">
+                                <p><?php _e('No employees have been synced yet. Use the sync button above to fetch employees from the API.', 'olgerdin-employee-sync'); ?></p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                <?php endif; ?>
             </div>
         </div>
-        
-        
-        <?php
+     <?php
     }
 }

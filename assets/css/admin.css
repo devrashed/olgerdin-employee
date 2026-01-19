@@ -9,7 +9,8 @@
 .oes-auth-card,
 .oes-sync-controls,
 .oes-sync-results,
-.oes-last-sync {
+.oes-last-sync,
+.oes-employees-table {
     background: #fff;
     border: 1px solid #ccd0d4;
     padding: 20px;
@@ -146,4 +147,115 @@
 
 .oes-sync-errors li:last-child {
     border-bottom: none;
+}
+
+/* Employees table styles */
+.oes-employees-table {
+    margin-top: 30px;
+}
+
+.oes-table-container {
+    margin-top: 20px;
+    overflow-x: auto;
+}
+
+.oes-table-container table {
+    margin-top: 10px;
+}
+
+.oes-table-container th {
+    font-weight: 600;
+    padding: 12px;
+}
+
+.oes-table-container td {
+    padding: 12px;
+    vertical-align: middle;
+}
+
+.oes-employee-image img {
+    border: 1px solid #ddd;
+}
+
+.oes-no-data {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+    font-style: italic;
+}
+
+.oes-table-container td.oes-no-data {
+    text-align: center;
+    padding: 40px;
+    font-style: italic;
+    color: #666;
+}
+
+.oes-employees-table .description {
+    margin-bottom: 15px;
+    color: #666;
+}
+
+/* Pagination Styles */
+.oes-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.oes-page-link {
+    display: inline-block;
+    padding: 8px 12px;
+    margin: 2px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    color: #0073aa;
+    text-decoration: none;
+    font-size: 14px;
+    line-height: 1;
+    min-width: 35px;
+    text-align: center;
+}
+
+.oes-page-link:hover {
+    background: #f1f1f1;
+    border-color: #b1b1b1;
+    color: #135e96;
+}
+
+.oes-page-link.oes-current {
+    background: #0073aa;
+    border-color: #0073aa;
+    color: #fff;
+    font-weight: bold;
+}
+
+.oes-page-link.oes-dots {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: default;
+    padding: 8px 5px;
+}
+
+.oes-page-link.oes-prev,
+.oes-page-link.oes-next {
+    padding: 8px 15px;
+    font-weight: 500;
+}
+
+.oes-pagination-top {
+    margin-bottom: 20px;
+}
+
+.oes-pagination-bottom {
+    margin-top: 20px;
 }
