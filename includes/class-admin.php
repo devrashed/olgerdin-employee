@@ -331,7 +331,7 @@ class OES_Admin_Settings {
                     
                 <?php elseif ($current_tab === 'sync'): ?>
                     <!-- Sync Tab Content -->
-                    <?php if (!$auth_status['token_valid']): ?>
+                    <?php //if (!$auth_status['token_valid']): ?>
                         <div class="notice notice-error">
                             <p><?php echo esc_html('You must authenticate with the API before you can sync employees.', 'olgerdin-employee-sync'); ?></p>
                             <p>
@@ -340,7 +340,7 @@ class OES_Admin_Settings {
                                 </a>
                             </p>
                         </div>
-                    <?php else: ?>
+                    <?php //else: ?>
                         <div class="oes-sync-controls">
                             <form method="post">
                                 <?php wp_nonce_field('oes_admin_action', 'oes_nonce'); ?>
@@ -398,7 +398,7 @@ class OES_Admin_Settings {
                         <?php endif; ?>
                     <?php endif; ?>
                     
-                <?php endif; ?>
+                <?php //endif; ?>
 
                 <!-- End tab -->
             </div>
